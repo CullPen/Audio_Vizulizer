@@ -5,32 +5,51 @@ document.getElementById('audioFile').addEventListener('change', function(e) {
         reader.onload = function(e) {
             const audioContext = new AudioContext();
             audioContext.decodeAudioData(e.target.result, function(buffer) {
-                drawWaveform(buffer);
+                visualizeAudio(buffer, audioContext);
             });
         };
         reader.readAsArrayBuffer(file);
     }
 });
 
-function drawWaveform(buffer) {
+function visualizeAudio(buffer, audioContext) {
     const canvas = document.getElementById('audioCanvas');
     const ctx = canvas.getContext('2d');
     const width = canvas.width;
     const height = canvas.height;
-    const channelData = buffer.getChannelData(0);
-    const step = Math.ceil(channelData.length / width);
-    const amp = height / 2;
+    const analyser = audioContext.createAnalyser();
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
 
-    ctx.clearRect(0, 0, width, height);
-    ctx.beginPath();
-    ctx.moveTo(0, amp);
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+    analyser.fftSize = 2048;
 
-    for (let i = 0; i < width; i++) {
-        const min = Math.min(...channelData.slice(i * step, (i + 1) * step));
-        const max = Math.max(...channelData.slice(i * step, (i + 1) * step));
-        ctx.lineTo(i, (1 + min) * amp);
-        ctx.lineTo(i, (1 + max) * amp);
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function draw() {
+        requestAnimationFrame(draw);
+
+        analyser.getByteFrequencyData(dataArray);
+
+        ctx.fillStyle = 'rgb(0, 0, 0)';
+        ctx.fillRect(0, 0, width, height);
+
+        const barWidth = (width / bufferLength) * 2.5;
+        let barHeight;
+        let x = 0;
+
+        for(let i = 0; i < bufferLength; i++) {
+            barHeight = dataArray[i];
+
+            ctx.fillStyle = 'rgb(' + (barHeight+100) + ',50,50)';
+            ctx.fillRect(x, height - barHeight / 2, barWidth, barHeight / 2);
+
+            x += barWidth + 1;
+        }
     }
 
-    ctx.stroke();
+    source.start();
+    draw();
 }
